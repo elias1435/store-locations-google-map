@@ -1,61 +1,88 @@
 // Enqueue Google Maps JS API in your footer
 // post type 'branch-location'
 // custom fields 1. websiteLink, 2. lat, 3. lng
+// icons will be display term wise
+
 function enqueue_google_maps_script() {
-    wp_enqueue_script('google-maps-api', 'https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY', [], null, true);
+    // Add callback=initMap to ensure map loads only after API is ready
+    wp_register_script(
+        'google-maps-api',
+        'https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY',
+        [],
+        null,
+        true
+    );
+    wp_enqueue_script('google-maps-api');
 }
 add_action('wp_enqueue_scripts', 'enqueue_google_maps_script');
 
-// Shortcode to display dynamic map with branch locations
 function custom_google_map_shortcode() {
     $args = array(
         'post_type' => 'branch-location',
         'posts_per_page' => -1,
     );
-
     $query = new WP_Query($args);
 
-    ob_start();
-    ?>
+    // Updated icon URLs
+    $icon_urls = [
+        'orange' => 'https://example/assets/img/orange_icon.png',
+        'pink' => 'https://example/assets/img/pink_icon.png',
+        'default' => 'https://example/assets/img/default_icon.png'
+    ];
+
+    $locations = [];
+
+    while ($query->have_posts()) {
+        $query->the_post();
+
+        $term = get_the_terms(get_the_ID(), 'branch_ctg');
+        $term_slug = $term && !is_wp_error($term) ? $term[0]->slug : 'default';
+        $icon = isset($icon_urls[$term_slug]) ? $icon_urls[$term_slug] : $icon_urls['default'];
+
+        $locations[] = [
+            'storeName' => get_the_title(),
+            'storeAddress' => wp_strip_all_tags(get_the_content()),
+            'websiteLink' => get_post_meta(get_the_ID(), 'websiteLink', true),
+            'lat' => (float) get_post_meta(get_the_ID(), 'lat', true),
+            'lng' => (float) get_post_meta(get_the_ID(), 'lng', true),
+            'icon' => $icon
+        ];
+    }
+
+    wp_reset_postdata();
+
+    ob_start(); ?>
     <div id="customMap" style="width: 100%; height: 450px;"></div>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const locations = [
-                <?php while ($query->have_posts()) : $query->the_post(); ?>
-                {
-                    storeName: "<?php the_title(); ?>",
-                    storeAddress: `<?php echo nl2br(wp_strip_all_tags(get_the_content())); ?>`,
-                    websiteLink: "<?php echo get_post_meta(get_the_ID(), 'websiteLink', true); ?>",
-                    lat: <?php echo floatval(get_post_meta(get_the_ID(), 'lat', true)); ?>,
-                    lng: <?php echo floatval(get_post_meta(get_the_ID(), 'lng', true)); ?>
-                },
-                <?php endwhile; wp_reset_postdata(); ?>
-            ];
+        const locations = <?php echo wp_json_encode($locations); ?>;
+
+        function initMap() {
+            if (!locations.length) return;
 
             const map = new google.maps.Map(document.getElementById('customMap'), {
                 zoom: 6,
                 center: {lat: locations[0].lat, lng: locations[0].lng},
             });
 
-            const infowindow = new google.maps.InfoWindow({pixelOffset: new google.maps.Size(0, 0)});
+            const infowindow = new google.maps.InfoWindow({ pixelOffset: new google.maps.Size(0, 0) });
             let closeTimeout;
 
             locations.forEach(location => {
                 const marker = new google.maps.Marker({
-                    position: {lat: location.lat, lng: location.lng},
+                    position: { lat: location.lat, lng: location.lng },
                     map: map,
                     icon: {
-                        url: 'https://diamondlogistics.co.uk/wp-content/uploads/2025/03/markerpinSmall-1.png',
+                        url: location.icon,
                         scaledSize: new google.maps.Size(40, 40),
                         anchor: new google.maps.Point(20, 40)
                     }
                 });
 
-                let contentString = `
+                const contentString = `
                     <div style="padding:10px; width:200px; max-height:220px;">
-                        <div style="font-size:20px; font-weight:bold; margin-bottom:5px;">${location.storeName}</div>
+                        <div style="font-size:20px; font-weight:bold; margin-bottom:5px;color:#C6007E;">${location.storeName}</div>
                         <div style="font-size:14px; margin-bottom:5px;">${location.storeAddress}</div>
-                        ${location.websiteLink ? `<a href="${location.websiteLink}" target="_blank" style="margin-top:5px; display:inline-block;">Visit ${location.storeName}</a>` : ''}
+                        ${location.websiteLink ? `<a href="${location.websiteLink}" target="_blank" style="margin-top:5px; padding:10px; border: 1px solid #C6007E; display:inline-block;color:#C6007E;font-weight:bold;">Visit ${location.storeName}</a>` : ''}
                     </div>
                 `;
 
@@ -84,7 +111,7 @@ function custom_google_map_shortcode() {
                     });
                 });
             });
-        });
+        }
     </script>
     <?php
     return ob_get_clean();
