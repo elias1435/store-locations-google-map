@@ -41,7 +41,7 @@ function custom_google_map_shortcode() {
 
         $locations[] = [
             'storeName' => get_the_title(),
-            'storeAddress' => wp_strip_all_tags(get_the_content()),
+            'storeAddress' => apply_filters('the_content', get_the_content()),
             'websiteLink' => get_post_meta(get_the_ID(), 'websiteLink', true),
             'lat' => (float) get_post_meta(get_the_ID(), 'lat', true),
             'lng' => (float) get_post_meta(get_the_ID(), 'lng', true),
